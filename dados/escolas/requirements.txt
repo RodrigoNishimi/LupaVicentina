@@ -1,4 +1,0 @@
-pandas
-geopy
-openpyxl
-tabulate
