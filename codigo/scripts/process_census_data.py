@@ -249,6 +249,8 @@ col_order = [
     "pop_branco",
     "pop_negros",
     "hab_setor",
+    "densidade",
+    "hab/ha",
     "renda_sal",
     "qtd_estabelecimentos",
     "num_escolas",
