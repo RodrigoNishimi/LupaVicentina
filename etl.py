@@ -8,6 +8,7 @@ GitHub Pages — sem backend).
 
 Uso:  python etl.py
 """
+
 import base64
 import json
 import re
@@ -19,10 +20,10 @@ from pathlib import Path
 import pandas as pd
 
 BASE = Path(__file__).resolve().parent
-DADOS = BASE / "dados_tratados"
+DADOS = BASE / "dados"
 TEMPLATE = BASE / "template.html"
 SAIDA = BASE / "index.html"
-LOGO = BASE / "logo_branco_verde.png"
+LOGO = BASE / "assets/logo_branco_verde.png"
 
 # Caixa delimitadora aproximada de São Vicente (SP) — pontos fora dela são
 # erros de geocodificação e ficam sem marcador no mapa.
@@ -32,9 +33,16 @@ LNG_MIN, LNG_MAX = -46.62, -46.28
 # ---------------------------------------------------------------- normalização
 
 ABREV = {
-    "JD": "JARDIM", "PQ": "PARQUE", "PRQ": "PARQUE", "VL": "VILA",
-    "CJTO": "CONJUNTO", "CONJ": "CONJUNTO", "SRA": "SENHORA",
-    "STA": "SANTA", "NSA": "NOSSA", "AV": "AVENIDA",
+    "JD": "JARDIM",
+    "PQ": "PARQUE",
+    "PRQ": "PARQUE",
+    "VL": "VILA",
+    "CJTO": "CONJUNTO",
+    "CONJ": "CONJUNTO",
+    "SRA": "SENHORA",
+    "STA": "SANTA",
+    "NSA": "NOSSA",
+    "AV": "AVENIDA",
 }
 
 # Grafias diferentes do mesmo bairro (aplicado após normalizar/expandir)
@@ -86,34 +94,41 @@ def fix_coord(v):
 
 def dentro_da_cidade(lat, lng):
     return (
-        lat is not None and lng is not None
-        and LAT_MIN <= lat <= LAT_MAX and LNG_MIN <= lng <= LNG_MAX
+        lat is not None
+        and lng is not None
+        and LAT_MIN <= lat <= LAT_MAX
+        and LNG_MIN <= lng <= LNG_MAX
     )
 
 
 # --------------------------------------------------------------------- censo
+
 
 def carrega_censo():
     df = pd.read_csv(DADOS / "dados_censo_limpos.csv")
     df = df.dropna(subset=["NM_BAIRRO"])
     registros = []
     for _, r in df.iterrows():
-        pop_total = int(r["pop_amarel"] + r["pop_indige"] + r["pop_branco"] + r["pop_negros"])
-        registros.append({
-            "bairro": r["NM_BAIRRO"].strip(),
-            "key": norm(r["NM_BAIRRO"]),
-            "situacao": r["SITUACAO"],
-            "area_km2": round(float(r["AREA_KM2"]), 4),
-            "pop_amarela": int(r["pop_amarel"]),
-            "pop_indigena": int(r["pop_indige"]),
-            "pop_branca": int(r["pop_branco"]),
-            "pop_negra": int(r["pop_negros"]),
-            "pop_total": pop_total,
-            "hab_setor": int(r["hab_setor"]),
-            "densidade": round(float(r["densidade"]), 1),
-            "hab_ha": round(float(r["hab/ha"]), 1),
-            "renda_sal": float(r["renda_sal"]),
-        })
+        pop_total = int(
+            r["pop_amarel"] + r["pop_indige"] + r["pop_branco"] + r["pop_negros"]
+        )
+        registros.append(
+            {
+                "bairro": r["NM_BAIRRO"].strip(),
+                "key": norm(r["NM_BAIRRO"]),
+                "situacao": r["SITUACAO"],
+                "area_km2": round(float(r["AREA_KM2"]), 4),
+                "pop_amarela": int(r["pop_amarel"]),
+                "pop_indigena": int(r["pop_indige"]),
+                "pop_branca": int(r["pop_branco"]),
+                "pop_negra": int(r["pop_negros"]),
+                "pop_total": pop_total,
+                "hab_setor": int(r["hab_setor"]),
+                "densidade": round(float(r["densidade"]), 1),
+                "hab_ha": round(float(r["hab/ha"]), 1),
+                "renda_sal": float(r["renda_sal"]),
+            }
+        )
     return registros
 
 
@@ -165,19 +180,31 @@ def carrega_escolas(keys_censo):
         porte = r["Porte da Escola"] if pd.notna(r["Porte da Escola"]) else None
         etapas = []
         if pd.notna(r["Etapas e Modalidade de Ensino Oferecidas"]):
-            etapas = [e.strip() for e in str(r["Etapas e Modalidade de Ensino Oferecidas"]).split(",")]
-        registros.append({
-            "nome": str(r["Escola"]).strip(),
-            "categoria": r["Categoria Administrativa"],
-            "endereco": str(r["Endereço"]).strip() if pd.notna(r["Endereço"]) else "",
-            "telefone": str(r["Telefone"]).strip() if pd.notna(r["Telefone"]) else "",
-            "porte": PORTE_CURTO.get(porte) if porte else None,
-            "capacidade": CAPACIDADE.get(porte, 0) if porte else 0,
-            "etapas": etapas,
-            "status": STATUS.get(r["Restrição de Atendimento"], r["Restrição de Atendimento"]),
-            "lat": lat, "lng": lng,
-            "key": key,
-        })
+            etapas = [
+                e.strip()
+                for e in str(r["Etapas e Modalidade de Ensino Oferecidas"]).split(",")
+            ]
+        registros.append(
+            {
+                "nome": str(r["Escola"]).strip(),
+                "categoria": r["Categoria Administrativa"],
+                "endereco": str(r["Endereço"]).strip()
+                if pd.notna(r["Endereço"])
+                else "",
+                "telefone": str(r["Telefone"]).strip()
+                if pd.notna(r["Telefone"])
+                else "",
+                "porte": PORTE_CURTO.get(porte) if porte else None,
+                "capacidade": CAPACIDADE.get(porte, 0) if porte else 0,
+                "etapas": etapas,
+                "status": STATUS.get(
+                    r["Restrição de Atendimento"], r["Restrição de Atendimento"]
+                ),
+                "lat": lat,
+                "lng": lng,
+                "key": key,
+            }
+        )
     return registros
 
 
@@ -218,27 +245,33 @@ def carrega_saude(keys_censo):
             lat, lng = None, None
         numero = str(r["NU_ENDERECO"]).strip() if pd.notna(r["NU_ENDERECO"]) else "S/N"
         endereco = f"{str(r['NO_LOGRADOURO']).strip().title()}, {numero}"
-        registros.append({
-            "nome": str(r["NOME"]).strip(),
-            "endereco": endereco,
-            "telefone": str(r["NU_TELEFONE"]).strip() if pd.notna(r["NU_TELEFONE"]) else "",
-            "turno": turno_curto(r["DS_TURNO_ATENDIMENTO"]),
-            "sus": str(r["CO_AMBULATORIAL_SUS"]).strip().upper() == "SIM",
-            "servicos": {
-                "cirurgico": flag(r["ST_CENTRO_CIRURGICO"]),
-                "obstetrico": flag(r["ST_CENTRO_OBSTETRICO"]),
-                "neonatal": flag(r["ST_CENTRO_NEONATAL"]),
-                "hospitalar": flag(r["ST_ATEND_HOSPITALAR"]),
-                "apoio": flag(r["ST_SERVICO_APOIO"]),
-                "ambulatorial": flag(r["ST_ATEND_AMBULATORIAL"]),
-            },
-            "lat": lat, "lng": lng,
-            "key": key,
-        })
+        registros.append(
+            {
+                "nome": str(r["NOME"]).strip(),
+                "endereco": endereco,
+                "telefone": str(r["NU_TELEFONE"]).strip()
+                if pd.notna(r["NU_TELEFONE"])
+                else "",
+                "turno": turno_curto(r["DS_TURNO_ATENDIMENTO"]),
+                "sus": str(r["CO_AMBULATORIAL_SUS"]).strip().upper() == "SIM",
+                "servicos": {
+                    "cirurgico": flag(r["ST_CENTRO_CIRURGICO"]),
+                    "obstetrico": flag(r["ST_CENTRO_OBSTETRICO"]),
+                    "neonatal": flag(r["ST_CENTRO_NEONATAL"]),
+                    "hospitalar": flag(r["ST_ATEND_HOSPITALAR"]),
+                    "apoio": flag(r["ST_SERVICO_APOIO"]),
+                    "ambulatorial": flag(r["ST_ATEND_AMBULATORIAL"]),
+                },
+                "lat": lat,
+                "lng": lng,
+                "key": key,
+            }
+        )
     return registros
 
 
 # ------------------------------------------------------------------------ logo
+
 
 def logo_data_uri():
     """Lê a logo, recorta a margem verde sobrando e devolve como data URI PNG.
@@ -247,20 +280,27 @@ def logo_data_uri():
     recorte usa Pillow quando disponível; sem Pillow, embute a imagem íntegra.
     """
     if not LOGO.exists():
-        print("AVISO: logo_branco_verde.png não encontrada — cabeçalho ficará sem logo.")
+        print(
+            "AVISO: logo_branco_verde.png não encontrada — cabeçalho ficará sem logo."
+        )
         return ""
     raw = LOGO.read_bytes()
     try:
         from PIL import Image, ImageChops
+
         im = Image.open(BytesIO(raw)).convert("RGBA")
         fundo = Image.new("RGB", im.size, im.convert("RGB").getpixel((0, 0)))
         bbox = ImageChops.difference(im.convert("RGB"), fundo).getbbox()
         if bbox:
             pad = 26
-            im = im.crop((
-                max(bbox[0] - pad, 0), max(bbox[1] - pad, 0),
-                min(bbox[2] + pad, im.width), min(bbox[3] + pad, im.height),
-            ))
+            im = im.crop(
+                (
+                    max(bbox[0] - pad, 0),
+                    max(bbox[1] - pad, 0),
+                    min(bbox[2] + pad, im.width),
+                    min(bbox[3] + pad, im.height),
+                )
+            )
         buf = BytesIO()
         im.save(buf, format="PNG", optimize=True)
         raw = buf.getvalue()
@@ -272,6 +312,7 @@ def logo_data_uri():
 
 # ----------------------------------------------------------------------- main
 
+
 def main():
     censo = carrega_censo()
     keys_censo = [c["key"] for c in censo]
@@ -280,7 +321,9 @@ def main():
 
     # Bairros presentes só nas bases de equipamentos (sem dados do censo)
     conhecidos = set(keys_censo)
-    extras = sorted({r["key"] for r in escolas + saude if r["key"] and r["key"] not in conhecidos})
+    extras = sorted(
+        {r["key"] for r in escolas + saude if r["key"] and r["key"] not in conhecidos}
+    )
     extra_bairros = [{"key": k, "bairro": title_pt(k)} for k in extras]
 
     dados = {
@@ -303,7 +346,9 @@ def main():
 
     sem_coord = sum(1 for r in escolas + saude if r["lat"] is None)
     print(f"OK: {SAIDA.name} gerado.")
-    print(f"  bairros do censo: {len(censo)} | escolas: {len(escolas)} | saúde: {len(saude)}")
+    print(
+        f"  bairros do censo: {len(censo)} | escolas: {len(escolas)} | saúde: {len(saude)}"
+    )
     print(f"  bairros extras (sem censo): {len(extra_bairros)}")
     print(f"  registros sem coordenada válida (fora do mapa): {sem_coord}")
 
