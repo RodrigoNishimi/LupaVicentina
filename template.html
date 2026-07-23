@@ -76,6 +76,13 @@ section{margin-bottom:34px}
   border-left:6px solid var(--laranja);padding-left:12px;margin-bottom:6px;
 }
 .sec-sub{color:var(--ink-2);font-size:.9rem;margin-bottom:16px}
+
+/* ---------- legenda de fontes dos dados ---------- */
+.fonte{font-size:.72rem;color:var(--ink-2);line-height:1.35;margin-top:10px}
+.fonte b{color:var(--marrom);font-weight:500}
+.fonte::before{content:"📄 ";}
+.chart-card .fonte,.tabela-card .fonte{margin-top:10px;padding-top:8px;border-top:1px dashed var(--borda)}
+.sec-fonte{margin-top:12px}
 #contexto-bairro{
   display:none;background:var(--verde);color:#fff;border-radius:var(--raio);
   padding:10px 16px;margin-bottom:20px;font-size:.95rem;
@@ -256,6 +263,7 @@ footer a{color:var(--azul)}
       <span>📍 Endereço/CEP buscado</span>
       <span id="nota-coord"></span>
     </div>
+    <p class="fonte sec-fonte"><b>Fontes:</b> Escolas — Catálogo de Escolas (INEP/MEC) · Saúde — CNES, Cadastro Nacional de Estabelecimentos de Saúde (DATASUS/Ministério da Saúde) · base cartográfica — © colaboradores do OpenStreetMap</p>
   </section>
 
   <!-- Detalhamento -->
@@ -275,6 +283,7 @@ footer a{color:var(--azul)}
           <th>Escola</th><th>Categoria</th><th>Bairro</th><th>Endereço</th><th>Telefone</th><th>Porte</th><th>Etapas</th><th>Status</th>
         </tr></thead><tbody id="tb-escolas"></tbody></table>
       </div>
+      <p class="fonte"><b>Fonte:</b> Catálogo de Escolas (INEP/MEC)</p>
     </div>
     <div class="painel-aba" id="painel-saude">
       <p class="contagem" id="cont-saude"></p>
@@ -284,6 +293,7 @@ footer a{color:var(--azul)}
           <th>Unidade</th><th>Bairro</th><th>Endereço</th><th>Telefone</th><th>Turno</th><th>SUS</th><th>Serviços</th>
         </tr></thead><tbody id="tb-saude"></tbody></table>
       </div>
+      <p class="fonte"><b>Fonte:</b> CNES, Cadastro Nacional de Estabelecimentos de Saúde (DATASUS/Ministério da Saúde)</p>
     </div>
   </section>
 
@@ -300,6 +310,7 @@ footer a{color:var(--azul)}
       <div class="kpi"><div class="rotulo">Unidades de saúde</div><div class="valor" id="kpi-sau">–</div><div class="nota">estabelecimentos cadastrados</div><div class="comp" id="comp-sau"></div></div>
       <div class="kpi"><div class="rotulo">Saúde por 10 mil hab.</div><div class="valor" id="kpi-sau-pop">–</div><div class="nota">unidades ÷ população × 10.000</div><div class="comp" id="comp-sau-pop"></div></div>
     </div>
+    <p class="fonte sec-fonte"><b>Fontes:</b> População, renda e densidade — Censo Demográfico 2022 (IBGE) · Escolas — Catálogo de Escolas (INEP/MEC) · Unidades de saúde — CNES (DATASUS/Ministério da Saúde)</p>
   </section>
 
   <!-- Gráficos -->
@@ -313,31 +324,37 @@ footer a{color:var(--azul)}
         <h3>Composição populacional</h3>
         <p class="desc">Autodeclaração de cor/raça (Censo) — % bairro × cidade</p>
         <div class="chart-wrap"><canvas id="ch-demografia"></canvas></div>
+        <p class="fonte"><b>Fonte:</b> Censo Demográfico 2022 (IBGE)</p>
       </div>
       <div class="chart-card">
         <h3>Escolas por categoria administrativa</h3>
         <p class="desc">Somente escolas em atividade — % bairro × cidade</p>
         <div class="chart-wrap"><canvas id="ch-categoria"></canvas></div>
+        <p class="fonte"><b>Fonte:</b> Catálogo de Escolas (INEP/MEC)</p>
       </div>
       <div class="chart-card">
         <h3>Oferta de ensino</h3>
         <p class="desc">Nº de escolas que oferecem cada etapa/modalidade</p>
         <div class="chart-wrap"><canvas id="ch-etapas"></canvas></div>
+        <p class="fonte"><b>Fonte:</b> Catálogo de Escolas (INEP/MEC)</p>
       </div>
       <div class="chart-card">
         <h3>Capacidade de ensino (porte)</h3>
         <p class="desc">Escolas por faixa de matrículas</p>
         <div class="chart-wrap"><canvas id="ch-porte"></canvas></div>
+        <p class="fonte"><b>Fonte:</b> Catálogo de Escolas (INEP/MEC)</p>
       </div>
       <div class="chart-card">
         <h3>Serviços de saúde disponíveis</h3>
         <p class="desc">Nº de unidades com cada serviço</p>
         <div class="chart-wrap"><canvas id="ch-servicos"></canvas></div>
+        <p class="fonte"><b>Fonte:</b> CNES, Cadastro Nacional de Estabelecimentos de Saúde (DATASUS/Ministério da Saúde)</p>
       </div>
       <div class="chart-card">
         <h3>Atendimento ambulatorial SUS</h3>
         <p class="desc">Unidades de saúde com e sem convênio SUS — % bairro × cidade</p>
         <div class="chart-wrap"><canvas id="ch-sus"></canvas></div>
+        <p class="fonte"><b>Fonte:</b> CNES, Cadastro Nacional de Estabelecimentos de Saúde (DATASUS/Ministério da Saúde)</p>
       </div>
     </div>
   </section>
@@ -351,17 +368,20 @@ footer a{color:var(--azul)}
         <h3>TOP 10 — bairros com mais escolas</h3>
         <table><thead><tr><th>#</th><th>Bairro</th><th style="text-align:right">Escolas ativas</th></tr></thead>
         <tbody id="tb-top-escolas"></tbody></table>
+        <p class="fonte"><b>Fonte:</b> Catálogo de Escolas (INEP/MEC)</p>
       </div>
       <div class="tabela-card">
         <h3>TOP 10 — bairros com mais unidades de saúde</h3>
         <table><thead><tr><th>#</th><th>Bairro</th><th style="text-align:right">Unidades</th></tr></thead>
         <tbody id="tb-top-saude"></tbody></table>
+        <p class="fonte"><b>Fonte:</b> CNES, Cadastro Nacional de Estabelecimentos de Saúde (DATASUS/Ministério da Saúde)</p>
       </div>
     </div>
     <div class="chart-card" style="margin-top:16px">
       <h3>Densidade demográfica — TOP 10 bairros (hab/ha)</h3>
       <p class="desc">Bairros mais adensados da cidade — indicador-chave para adaptação climática</p>
       <div class="chart-wrap" style="min-height:300px"><canvas id="ch-densidade"></canvas></div>
+      <p class="fonte"><b>Fonte:</b> Censo Demográfico 2022 (IBGE)</p>
     </div>
   </section>
 </main>
