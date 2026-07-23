@@ -53,13 +53,20 @@ header{
 /* sem max-width: cada frase ocupa uma linha e só quebra se não couber na tela */
 header .sub{color:#eaf5ee;font-size:.95rem}
 .filtro-bairro{display:flex;flex-direction:column;gap:6px;min-width:260px}
-.filtro-bairro label{font-family:'Londrina Solid',cursive;font-size:1.15rem;color:#cfe4d6}
+.filtro-bairro label{font-family:'Londrina Solid',cursive;font-size:1.15rem;color:var(--verde-escuro)}
 .filtro-bairro select{
   font-family:'Roboto',sans-serif;font-size:1rem;
   padding:10px 14px;border-radius:10px;border:2px solid var(--verde);
   background:#fff;color:var(--ink);cursor:pointer;
 }
 .filtro-bairro select:focus{outline:3px solid var(--azul)}
+
+/* ---------- controles acima do mapa (filtro de bairro + busca unificada) ---------- */
+.controles-mapa{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end;margin-bottom:14px}
+.controles-mapa .filtro-bairro{min-width:240px}
+.busca-mapa{display:flex;flex-direction:column;gap:6px;flex:1 1 320px;min-width:260px}
+.busca-mapa label{font-family:'Londrina Solid',cursive;font-size:1.15rem;color:var(--verde-escuro)}
+.busca-mapa .busca{margin-bottom:0;max-width:none;width:100%}
 
 /* ---------- layout ---------- */
 main{max-width:1240px;margin:0 auto;padding:26px clamp(12px,3vw,32px) 40px}
@@ -94,6 +101,15 @@ section{margin-bottom:34px}
 .kpi .rotulo{font-size:.78rem;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-2);font-weight:500}
 .kpi .valor{font-family:'Roboto',sans-serif;font-weight:700;font-size:1.65rem;color:var(--verde-escuro);margin-top:4px}
 .kpi .nota{font-size:.72rem;color:var(--ink-2)}
+/* linha de comparação bairro × cidade (só aparece com bairro filtrado) */
+.kpi .comp{
+  display:none;margin-top:8px;padding-top:7px;border-top:1px dashed var(--borda);
+  font-size:.74rem;color:var(--ink-2);line-height:1.35;
+}
+.kpi .comp .cidade-val{font-weight:700;color:var(--marrom)}
+.kpi .comp .share{display:inline-block;margin-top:2px;color:var(--ink-2)}
+.kpi-grid.comparando .comp{display:block}
+.kpi-grid.comparando .kpi .valor::before{content:"Bairro ";font-family:'Roboto',sans-serif;font-weight:500;font-size:.72rem;color:var(--ink-2);display:block}
 
 /* ---------- gráficos ---------- */
 .chart-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
@@ -115,6 +131,8 @@ section{margin-bottom:34px}
 /* ponto que casa com a busca: anel escuro pulsante */
 @keyframes pulso-ponto{0%,100%{stroke-width:3}50%{stroke-width:7}}
 .ponto-destaque{animation:pulso-ponto 1.6s ease-in-out infinite}
+/* pino do endereço/CEP buscado — emoji sobre o mapa, sem a caixa branca padrão do Leaflet */
+.pin-wrap{background:none;border:none;font-size:24px;line-height:1;text-align:center;filter:drop-shadow(0 1px 2px rgba(0,0,0,.45))}
 #aviso-busca{
   display:flex;flex-wrap:wrap;align-items:center;gap:10px;
   background:var(--laranja);color:#fff;border-radius:var(--raio);
@@ -198,12 +216,6 @@ footer a{color:var(--azul)}
       <p class="sub">Painel de utilidade pública: demografia, escolas e unidades de saúde de São Vicente (SP), bairro a bairro.</p>
       <p class="sub">Escolha um bairro para ver o retrato local.</p>
     </div>
-    <div class="filtro-bairro">
-      <label for="sel-bairro">Filtrar por bairro</label>
-      <select id="sel-bairro">
-        <option value="">🏙️ Visão Geral — toda a cidade</option>
-      </select>
-    </div>
   </div>
 </header>
 
@@ -213,34 +225,98 @@ footer a{color:var(--azul)}
     <strong id="ctx-nome"></strong><span id="ctx-detalhe"></span>
   </div>
 
+  <!-- Mapa -->
+  <section aria-label="Mapa">
+    <h2 class="sec-titulo">Mapa de equipamentos públicos</h2>
+    <p class="sec-sub">Filtre por bairro e busque por escola, unidade de saúde, endereço ou CEP.
+    Use o controle no canto superior direito do mapa para ligar/desligar camadas; clique nos pontos para ver detalhes.</p>
+    <div class="controles-mapa">
+      <div class="filtro-bairro">
+        <label for="sel-bairro">Filtrar por bairro</label>
+        <select id="sel-bairro">
+          <option value="">🏙️ Visão Geral — toda a cidade</option>
+        </select>
+      </div>
+      <div class="busca-mapa">
+        <label for="busca-geral">Buscar no mapa</label>
+        <input class="busca" id="busca-geral" type="search" placeholder="Escola, unidade de saúde, endereço ou CEP em São Vicente…">
+      </div>
+    </div>
+    <div id="aviso-busca" hidden>
+      <button id="btn-limpar-busca" type="button">Limpar busca</button>
+      <span id="aviso-busca-texto"></span>
+    </div>
+    <div id="mapa"></div>
+    <div class="legenda-mapa">
+      <span><span class="dot" style="background:#e87722"></span>Escolas públicas</span>
+      <span><span class="dot" style="background:#00a3e0"></span>Escolas privadas</span>
+      <span><span class="dot" style="background:#007a4a"></span>Saúde — atende SUS</span>
+      <span><span class="dot" style="background:#874a33"></span>Saúde — demais unidades</span>
+      <span><span class="dot anel"></span>Resultado da busca</span>
+      <span>📍 Endereço/CEP buscado</span>
+      <span id="nota-coord"></span>
+    </div>
+  </section>
+
+  <!-- Detalhamento -->
+  <section aria-label="Tabelas de detalhamento">
+    <h2 class="sec-titulo">Detalhamento por unidade</h2>
+    <p class="sec-sub">Listas completas que respondem ao filtro de bairro e à busca do mapa acima
+    — o que você buscar lá aparece destacado aqui e no mapa.</p>
+    <div class="abas">
+      <button class="aba ativa" data-aba="escolas" type="button">🏫 Escolas</button>
+      <button class="aba" data-aba="saude" type="button">🏥 Unidades de saúde</button>
+    </div>
+    <div class="painel-aba ativa" id="painel-escolas">
+      <p class="contagem" id="cont-escolas"></p>
+      <p class="tabela-vazia" id="vazio-escolas" hidden></p>
+      <div class="scroll-tabela" id="wrap-escolas">
+        <table><thead><tr>
+          <th>Escola</th><th>Categoria</th><th>Bairro</th><th>Endereço</th><th>Telefone</th><th>Porte</th><th>Etapas</th><th>Status</th>
+        </tr></thead><tbody id="tb-escolas"></tbody></table>
+      </div>
+    </div>
+    <div class="painel-aba" id="painel-saude">
+      <p class="contagem" id="cont-saude"></p>
+      <p class="tabela-vazia" id="vazio-saude" hidden></p>
+      <div class="scroll-tabela" id="wrap-saude">
+        <table><thead><tr>
+          <th>Unidade</th><th>Bairro</th><th>Endereço</th><th>Telefone</th><th>Turno</th><th>SUS</th><th>Serviços</th>
+        </tr></thead><tbody id="tb-saude"></tbody></table>
+      </div>
+    </div>
+  </section>
+
   <!-- KPIs -->
   <section aria-label="Indicadores-resumo">
     <h2 class="sec-titulo">Resumo</h2>
     <p class="sec-sub" id="kpi-escopo">Indicadores de toda a cidade.</p>
-    <div class="kpi-grid">
-      <div class="kpi"><div class="rotulo">População</div><div class="valor" id="kpi-pop">–</div><div class="nota">soma das populações por cor/raça</div></div>
-      <div class="kpi"><div class="rotulo">Renda média</div><div class="valor" id="kpi-renda">–</div><div class="nota">salários mínimos (média por bairro)</div></div>
-      <div class="kpi"><div class="rotulo">Densidade</div><div class="valor" id="kpi-dens">–</div><div class="nota">habitantes por hectare</div></div>
-      <div class="kpi"><div class="rotulo">Escolas ativas</div><div class="valor" id="kpi-esc">–</div><div class="nota">exclui unidades paralisadas</div></div>
-      <div class="kpi"><div class="rotulo">Capacidade de matrículas</div><div class="valor" id="kpi-cap">–</div><div class="nota">teto das faixas de porte (estimativa)</div></div>
-      <div class="kpi"><div class="rotulo">Unidades de saúde</div><div class="valor" id="kpi-sau">–</div><div class="nota">estabelecimentos cadastrados</div></div>
-      <div class="kpi"><div class="rotulo">Saúde por 10 mil hab.</div><div class="valor" id="kpi-sau-pop">–</div><div class="nota">unidades ÷ população × 10.000</div></div>
+    <div class="kpi-grid" id="kpi-grid">
+      <div class="kpi"><div class="rotulo">População</div><div class="valor" id="kpi-pop">–</div><div class="nota">soma das populações por cor/raça</div><div class="comp" id="comp-pop"></div></div>
+      <div class="kpi"><div class="rotulo">Renda média</div><div class="valor" id="kpi-renda">–</div><div class="nota">salários mínimos (média por bairro)</div><div class="comp" id="comp-renda"></div></div>
+      <div class="kpi"><div class="rotulo">Densidade</div><div class="valor" id="kpi-dens">–</div><div class="nota">habitantes por hectare</div><div class="comp" id="comp-dens"></div></div>
+      <div class="kpi"><div class="rotulo">Escolas ativas</div><div class="valor" id="kpi-esc">–</div><div class="nota">exclui unidades paralisadas</div><div class="comp" id="comp-esc"></div></div>
+      <div class="kpi"><div class="rotulo">Capacidade de matrículas</div><div class="valor" id="kpi-cap">–</div><div class="nota">teto das faixas de porte (estimativa)</div><div class="comp" id="comp-cap"></div></div>
+      <div class="kpi"><div class="rotulo">Unidades de saúde</div><div class="valor" id="kpi-sau">–</div><div class="nota">estabelecimentos cadastrados</div><div class="comp" id="comp-sau"></div></div>
+      <div class="kpi"><div class="rotulo">Saúde por 10 mil hab.</div><div class="valor" id="kpi-sau-pop">–</div><div class="nota">unidades ÷ população × 10.000</div><div class="comp" id="comp-sau-pop"></div></div>
     </div>
   </section>
 
   <!-- Gráficos -->
   <section aria-label="Gráficos">
     <h2 class="sec-titulo">Panorama em gráficos</h2>
-    <p class="sec-sub">Todos os gráficos respondem ao filtro de bairro. Passe o mouse para ver os valores.</p>
+    <p class="sec-sub">Todos os gráficos comparam o bairro escolhido com o total da cidade. Nos gráficos de contagem, a barra
+    fica empilhada (em <strong style="color:var(--laranja)">laranja</strong> a parte do bairro e, acima, o restante da cidade);
+    nos de composição, uma barra mostra a distribuição <strong>%</strong> do bairro e outra a da cidade. Passe o mouse para ver os valores.</p>
     <div class="chart-grid">
       <div class="chart-card">
         <h3>Composição populacional</h3>
-        <p class="desc">Autodeclaração de cor/raça (Censo)</p>
+        <p class="desc">Autodeclaração de cor/raça (Censo) — % bairro × cidade</p>
         <div class="chart-wrap"><canvas id="ch-demografia"></canvas></div>
       </div>
       <div class="chart-card">
         <h3>Escolas por categoria administrativa</h3>
-        <p class="desc">Somente escolas em atividade</p>
+        <p class="desc">Somente escolas em atividade — % bairro × cidade</p>
         <div class="chart-wrap"><canvas id="ch-categoria"></canvas></div>
       </div>
       <div class="chart-card">
@@ -260,60 +336,9 @@ footer a{color:var(--azul)}
       </div>
       <div class="chart-card">
         <h3>Atendimento ambulatorial SUS</h3>
-        <p class="desc">Unidades de saúde com e sem convênio SUS</p>
+        <p class="desc">Unidades de saúde com e sem convênio SUS — % bairro × cidade</p>
         <div class="chart-wrap"><canvas id="ch-sus"></canvas></div>
       </div>
-    </div>
-  </section>
-
-  <!-- Detalhamento -->
-  <section aria-label="Tabelas de detalhamento">
-    <h2 class="sec-titulo">Detalhamento por unidade</h2>
-    <p class="sec-sub">Listas completas, com busca por nome, endereço ou bairro. Respondem ao filtro de bairro
-    — e o que você buscar aqui aparece destacado no mapa abaixo.</p>
-    <div class="abas">
-      <button class="aba ativa" data-aba="escolas" type="button">🏫 Escolas</button>
-      <button class="aba" data-aba="saude" type="button">🏥 Unidades de saúde</button>
-    </div>
-    <div class="painel-aba ativa" id="painel-escolas">
-      <input class="busca" id="busca-escolas" type="search" placeholder="Buscar escola, endereço ou bairro…">
-      <p class="contagem" id="cont-escolas"></p>
-      <p class="tabela-vazia" id="vazio-escolas" hidden></p>
-      <div class="scroll-tabela" id="wrap-escolas">
-        <table><thead><tr>
-          <th>Escola</th><th>Categoria</th><th>Bairro</th><th>Endereço</th><th>Telefone</th><th>Porte</th><th>Etapas</th><th>Status</th>
-        </tr></thead><tbody id="tb-escolas"></tbody></table>
-      </div>
-    </div>
-    <div class="painel-aba" id="painel-saude">
-      <input class="busca" id="busca-saude" type="search" placeholder="Buscar unidade, endereço ou bairro…">
-      <p class="contagem" id="cont-saude"></p>
-      <p class="tabela-vazia" id="vazio-saude" hidden></p>
-      <div class="scroll-tabela" id="wrap-saude">
-        <table><thead><tr>
-          <th>Unidade</th><th>Bairro</th><th>Endereço</th><th>Telefone</th><th>Turno</th><th>SUS</th><th>Serviços</th>
-        </tr></thead><tbody id="tb-saude"></tbody></table>
-      </div>
-    </div>
-  </section>
-
-  <!-- Mapa -->
-  <section aria-label="Mapa">
-    <h2 class="sec-titulo">Mapa de equipamentos públicos</h2>
-    <p class="sec-sub">Use o controle no canto superior direito do mapa para ligar/desligar camadas.
-    Clique nos pontos para ver detalhes.</p>
-    <div id="aviso-busca" hidden>
-      <button id="btn-limpar-busca" type="button">Limpar busca</button>
-      <span id="aviso-busca-texto"></span>
-    </div>
-    <div id="mapa"></div>
-    <div class="legenda-mapa">
-      <span><span class="dot" style="background:#e87722"></span>Escolas públicas</span>
-      <span><span class="dot" style="background:#00a3e0"></span>Escolas privadas</span>
-      <span><span class="dot" style="background:#007a4a"></span>Saúde — atende SUS</span>
-      <span><span class="dot" style="background:#874a33"></span>Saúde — demais unidades</span>
-      <span><span class="dot anel"></span>Resultado da busca</span>
-      <span id="nota-coord"></span>
     </div>
   </section>
 
@@ -378,6 +403,11 @@ const escolasAtivas = DATA.escolas.filter(e => e.status !== 'Paralisada');
 
 let bairroAtual = ''; // '' = visão geral
 let termoEsc = '', termoSau = ''; // termos das buscas (em minúsculas), compartilhados com o mapa
+let termoGeral = '';              // texto da busca unificada acima do mapa (em minúsculas)
+// endereço/CEP localizado por geocodificação (Nominatim): {lat,lng,nome,termo} ou null
+let geoPin = null, geoBuscando = false, geoTentadoTermo = null;
+const geoCache = {};
+const RAIO_M = 600;               // raio de proximidade (m) ao redor do endereço buscado
 
 const filtraEsc = () => bairroAtual ? escolasAtivas.filter(e => e.key === bairroAtual) : escolasAtivas;
 const filtraSau = () => bairroAtual ? DATA.saude.filter(s => s.key === bairroAtual) : DATA.saude;
@@ -409,6 +439,22 @@ const casaSau = s => !termoSau || textoSau(s).includes(termoSau);
 })();
 
 /* ================= KPIs ================= */
+// totais da cidade inteira — usados no modo comparativo e na visão geral
+const CIDADE = (function(){
+  const pop = DATA.censo.reduce((s,c)=>s+c.pop_total,0);
+  const somaPond = DATA.censo.reduce((s,c)=>s+c.renda_sal*c.pop_total,0);
+  const areaHa = DATA.censo.reduce((s,c)=>s+c.area_km2,0)*100;
+  const esc = escolasAtivas.length;
+  const cap = escolasAtivas.reduce((s,e)=>s+(e.capacidade||0),0);
+  const sau = DATA.saude.length;
+  return {
+    pop, renda: pop?somaPond/pop:null, dens: areaHa?pop/areaHa:null,
+    esc, cap, sau, sauPop: (pop&&sau)?sau/pop*10000:null
+  };
+})();
+// "X% do total da cidade" quando os dois valores existem
+const share = (parte,total) => (parte!=null && total) ? ` · ${fmtDec(parte/total*100,1)}% do total` : '';
+
 function atualizaKPIs(){
   const esc = filtraEsc(), sau = filtraSau();
   const cap = esc.reduce((s,e)=>s+(e.capacidade||0),0);
@@ -418,13 +464,9 @@ function atualizaKPIs(){
     const c = censoPorKey[bairroAtual];
     if (c){ pop=c.pop_total; renda=c.renda_sal; dens=c.hab_ha; }
     $('kpi-escopo').textContent = 'Indicadores do bairro ' + nomeBairro(bairroAtual) +
-      (c ? '.' : ' — bairro sem registro no censo: indicadores demográficos indisponíveis.');
+      (c ? ', comparados com o total da cidade.' : ' — bairro sem registro no censo: indicadores demográficos indisponíveis.');
   } else {
-    pop = DATA.censo.reduce((s,c)=>s+c.pop_total,0);
-    const somaPond = DATA.censo.reduce((s,c)=>s+c.renda_sal*c.pop_total,0);
-    renda = somaPond/pop;
-    const areaHa = DATA.censo.reduce((s,c)=>s+c.area_km2,0)*100;
-    dens = pop/areaHa;
+    pop = CIDADE.pop; renda = CIDADE.renda; dens = CIDADE.dens;
     $('kpi-escopo').textContent = 'Indicadores de toda a cidade (' + DATA.censo.length + ' bairros do censo).';
   }
   $('kpi-pop').textContent  = fmtInt(pop);
@@ -434,6 +476,19 @@ function atualizaKPIs(){
   $('kpi-cap').textContent  = cap ? '≈ '+fmtInt(cap) : '0';
   $('kpi-sau').textContent  = fmtInt(sau.length);
   $('kpi-sau-pop').textContent = (pop && sau.length) ? fmtDec(sau.length/pop*10000,1) : '–';
+
+  // linha comparativa bairro × cidade
+  $('kpi-grid').classList.toggle('comparando', !!bairroAtual);
+  if (bairroAtual){
+    const cid = v => `Cidade: <span class="cidade-val">${v}</span>`;
+    $('comp-pop').innerHTML  = cid(fmtInt(CIDADE.pop)) + `<span class="share">${(pop!=null?share(pop,CIDADE.pop):' · sem dado do censo')}</span>`;
+    $('comp-renda').innerHTML= cid(fmtDec(CIDADE.renda,1)+' sal.') + (renda!=null?`<span class="share"> · bairro ${renda>=CIDADE.renda?'acima':'abaixo'} da média</span>`:'<span class="share"> · sem dado do censo</span>');
+    $('comp-dens').innerHTML = cid(fmtDec(CIDADE.dens,1)+' hab/ha') + (dens!=null?'':'<span class="share"> · sem dado do censo</span>');
+    $('comp-esc').innerHTML  = cid(fmtInt(CIDADE.esc)) + `<span class="share">${share(esc.length,CIDADE.esc)}</span>`;
+    $('comp-cap').innerHTML  = cid('≈ '+fmtInt(CIDADE.cap)) + `<span class="share">${share(cap,CIDADE.cap)}</span>`;
+    $('comp-sau').innerHTML  = cid(fmtInt(CIDADE.sau)) + `<span class="share">${share(sau.length,CIDADE.sau)}</span>`;
+    $('comp-sau-pop').innerHTML = cid(CIDADE.sauPop==null?'–':fmtDec(CIDADE.sauPop,1));
+  }
 
   const ctx = $('contexto-bairro');
   if (bairroAtual){
@@ -447,15 +502,20 @@ function atualizaKPIs(){
 }
 
 /* ================= gráficos ================= */
-const tooltipPct = {
-  callbacks:{ label(ctx){
-    const total = ctx.dataset.data.reduce((a,b)=>a+b,0) || 1;
-    return ` ${ctx.label}: ${fmtInt(ctx.parsed)} (${(ctx.parsed/total*100).toFixed(1)}%)`;
-  }}
-};
-const optRosca = {
-  responsive:true, maintainAspectRatio:false, cutout:'55%',
-  plugins:{ legend:{position:'bottom',labels:{boxWidth:14,borderRadius:4,useBorderRadius:true}}, tooltip:tooltipPct }
+// barras 100% empilhadas: cada linha (bairro / cidade) soma 100%, cores por categoria
+const optComposicao = {
+  responsive:true, maintainAspectRatio:false, indexAxis:'y',
+  plugins:{
+    legend:{position:'bottom',labels:{boxWidth:14,borderRadius:4,useBorderRadius:true}},
+    tooltip:{ callbacks:{ label(ctx){
+      const cnt = ctx.dataset._counts ? ctx.dataset._counts[ctx.dataIndex] : null;
+      return ` ${ctx.dataset.label}: ${fmtDec(ctx.parsed.x,1)}%` + (cnt!=null?` (${fmtInt(cnt)})`:'');
+    }}}
+  },
+  scales:{
+    x:{stacked:true, min:0, max:100, grid:{color:'#eee4dd'}, ticks:{callback:v=>v+'%'}},
+    y:{stacked:true, grid:{display:false}}
+  }
 };
 const optBarra = (horizontal=false) => ({
   responsive:true, maintainAspectRatio:false,
@@ -466,17 +526,67 @@ const optBarra = (horizontal=false) => ({
     y:{grid:{color:'#eee4dd'},ticks:{precision:0}}
   }
 });
+// barras empilhadas para comparar bairro × cidade
+const optBarraComp = (horizontal=false) => ({
+  responsive:true, maintainAspectRatio:false,
+  indexAxis: horizontal?'y':'x',
+  plugins:{
+    legend:{display:false, position:'bottom', labels:{boxWidth:14,borderRadius:4,useBorderRadius:true}},
+    tooltip:{ callbacks:{ label(ctx){ return ` ${ctx.dataset.label}: ${fmtInt(ctx.parsed[horizontal?'x':'y'])}`; } } }
+  },
+  scales:{
+    x:{stacked:true, grid:{color:'#eee4dd'},ticks:{precision:0}},
+    y:{stacked:true, grid:{color:'#eee4dd'},ticks:{precision:0}}
+  }
+});
 
 const charts = {};
-function fazRosca(id, labels, cores){
-  charts[id] = new Chart($(id), { type:'doughnut',
-    data:{ labels, datasets:[{ data:[], backgroundColor:cores, borderColor:COR.offwhite, borderWidth:2 }]},
-    options:optRosca });
+// gráfico de composição: uma barra por categoria, empilhadas até 100% em cada linha
+function fazBarraComposicao(id, cats, cores){
+  charts[id] = new Chart($(id), { type:'bar',
+    data:{ labels:[], datasets: cats.map((lab,i)=>({
+      label:lab, data:[], _counts:[], backgroundColor:cores[i],
+      borderColor:COR.offwhite, borderWidth:1, maxBarThickness:56, stack:'comp'
+    }))},
+    options:optComposicao });
+}
+// converte contagens em % e monta as linhas Bairro/Cidade (Cidade sozinha na visão geral)
+function setBarraComposicao(id, bairroCounts, cidadeCounts){
+  const ch = charts[id];
+  const somaB = bairroCounts ? bairroCounts.reduce((a,b)=>a+b,0) : 0;
+  const usaBairro = !!bairroAtual && somaB > 0;
+  const pct = arr => { const t = arr.reduce((a,b)=>a+b,0)||1; return arr.map(v=>v/t*100); };
+  const cidPct = pct(cidadeCounts);
+  const baiPct = usaBairro ? pct(bairroCounts) : null;
+  ch.data.labels = usaBairro ? [nomeBairro(bairroAtual), 'Cidade'] : ['Cidade'];
+  ch.data.datasets.forEach((ds,i)=>{
+    ds.data    = usaBairro ? [baiPct[i], cidPct[i]] : [cidPct[i]];
+    ds._counts = usaBairro ? [bairroCounts[i], cidadeCounts[i]] : [cidadeCounts[i]];
+  });
 }
 function fazBarra(id, labels, cor, horizontal=false){
   charts[id] = new Chart($(id), { type:'bar',
     data:{ labels, datasets:[{ data:[], backgroundColor:cor, borderRadius:4, maxBarThickness:46 }]},
     options:optBarra(horizontal) });
+}
+// dois datasets empilhados: parte do bairro (laranja) + restante da cidade (cor base)
+function fazBarraComp(id, labels, cor, horizontal=false){
+  charts[id] = new Chart($(id), { type:'bar',
+    data:{ labels, datasets:[
+      { label:'Bairro',  data:[], backgroundColor:COR.laranja, borderRadius:4, maxBarThickness:46, stack:'s' },
+      { label:'Cidade',  data:[], backgroundColor:cor,         borderRadius:4, maxBarThickness:46, stack:'s' }
+    ]},
+    options:optBarraComp(horizontal) });
+}
+// aplica os dados nas barras comparativas; empilha só quando há bairro selecionado
+function setBarraComp(id, cityArr, bairroArr){
+  const ch = charts[id];
+  const comparando = !!bairroAtual;
+  ch.data.datasets[0].data = cityArr.map((v,i)=> comparando ? bairroArr[i] : 0);
+  ch.data.datasets[1].data = cityArr.map((v,i)=> comparando ? Math.max(v - bairroArr[i], 0) : v);
+  ch.data.datasets[0].label = comparando ? 'Bairro: ' + nomeBairro(bairroAtual) : 'Bairro';
+  ch.data.datasets[1].label = comparando ? 'Restante da cidade' : 'Cidade';
+  ch.options.plugins.legend.display = comparando;
 }
 
 const ETAPAS = ['Educação Infantil','Ensino Fundamental','Ensino Médio','Educação de Jovens Adultos','Educação Profissional'];
@@ -486,35 +596,38 @@ const SERVICOS = [
   ['cirurgico','Centro cirúrgico'], ['obstetrico','Centro obstétrico'], ['neonatal','Centro neonatal']
 ];
 
-fazRosca('ch-demografia', ['Branca','Negra (preta+parda)','Amarela','Indígena'], [COR.verde,COR.laranja,COR.azul,COR.marrom]);
-fazRosca('ch-categoria',  ['Pública Municipal','Pública Estadual','Privada'], [COR.verde,COR.azul,COR.laranja]);
-fazBarra('ch-etapas', ETAPAS.map(e=>e.replace('Educação de Jovens Adultos','EJA')), COR.verde);
-fazBarra('ch-porte', PORTES, COR.azul);
-fazBarra('ch-servicos', SERVICOS.map(s=>s[1]), COR.verde, true);
-fazRosca('ch-sus', ['Atende SUS','Não atende SUS'], [COR.verde,COR.marrom]);
+fazBarraComposicao('ch-demografia', ['Branca','Negra (preta+parda)','Amarela','Indígena'], [COR.verde,COR.laranja,COR.azul,COR.marrom]);
+fazBarraComposicao('ch-categoria',  ['Pública Municipal','Pública Estadual','Privada'], [COR.verde,COR.azul,COR.laranja]);
+fazBarraComp('ch-etapas', ETAPAS.map(e=>e.replace('Educação de Jovens Adultos','EJA')), COR.verde);
+fazBarraComp('ch-porte', PORTES, COR.azul);
+fazBarraComp('ch-servicos', SERVICOS.map(s=>s[1]), COR.verde, true);
+fazBarraComposicao('ch-sus', ['Atende SUS','Não atende SUS'], [COR.verde,COR.marrom]);
 fazBarra('ch-densidade', [], COR.verde, true);
 
 function atualizaGraficos(){
-  const esc = filtraEsc(), sau = filtraSau();
+  const escB = bairroAtual ? escolasAtivas.filter(e=>e.key===bairroAtual) : [];
+  const sauB = bairroAtual ? DATA.saude.filter(s=>s.key===bairroAtual) : [];
 
-  // demografia
-  let demo=[0,0,0,0];
-  if (bairroAtual){
-    const c = censoPorKey[bairroAtual];
-    if (c) demo=[c.pop_branca,c.pop_negra,c.pop_amarela,c.pop_indigena];
-  } else {
-    DATA.censo.forEach(c=>{ demo[0]+=c.pop_branca; demo[1]+=c.pop_negra; demo[2]+=c.pop_amarela; demo[3]+=c.pop_indigena; });
-  }
-  charts['ch-demografia'].data.datasets[0].data = demo;
+  // roscas → barras de composição (%): distribuição do bairro vs. da cidade
+  const demoCidade=[0,0,0,0];
+  DATA.censo.forEach(c=>{ demoCidade[0]+=c.pop_branca; demoCidade[1]+=c.pop_negra; demoCidade[2]+=c.pop_amarela; demoCidade[3]+=c.pop_indigena; });
+  let demoBairro=null;
+  if (bairroAtual){ const c=censoPorKey[bairroAtual]; if (c) demoBairro=[c.pop_branca,c.pop_negra,c.pop_amarela,c.pop_indigena]; }
+  setBarraComposicao('ch-demografia', demoBairro, demoCidade);
 
-  const catCont = {'Pública Municipal':0,'Pública Estadual':0,'Privada':0};
-  esc.forEach(e=>{ if (catCont[e.categoria]!=null) catCont[e.categoria]++; });
-  charts['ch-categoria'].data.datasets[0].data = Object.values(catCont);
+  const contaCat = lista => { const m={'Pública Municipal':0,'Pública Estadual':0,'Privada':0}; lista.forEach(e=>{ if(m[e.categoria]!=null)m[e.categoria]++; }); return Object.values(m); };
+  setBarraComposicao('ch-categoria', bairroAtual?contaCat(escB):null, contaCat(escolasAtivas));
 
-  charts['ch-etapas'].data.datasets[0].data = ETAPAS.map(et => esc.filter(e=>e.etapas.includes(et)).length);
-  charts['ch-porte'].data.datasets[0].data  = PORTES.map(p => esc.filter(e=>e.porte===p).length);
-  charts['ch-servicos'].data.datasets[0].data = SERVICOS.map(([k]) => sau.filter(s=>s.servicos[k]).length);
-  charts['ch-sus'].data.datasets[0].data = [sau.filter(s=>s.sus).length, sau.filter(s=>!s.sus).length];
+  const contaSus = lista => [lista.filter(s=>s.sus).length, lista.filter(s=>!s.sus).length];
+  setBarraComposicao('ch-sus', bairroAtual?contaSus(sauB):null, contaSus(DATA.saude));
+
+  // barras comparativas (contagens absolutas, empilhadas): bairro + restante da cidade
+  const contaEtapa = lista => ETAPAS.map(et => lista.filter(e=>e.etapas.includes(et)).length);
+  const contaPorte = lista => PORTES.map(p => lista.filter(e=>e.porte===p).length);
+  const contaServ  = lista => SERVICOS.map(([k]) => lista.filter(s=>s.servicos[k]).length);
+  setBarraComp('ch-etapas',   contaEtapa(escolasAtivas), contaEtapa(escB));
+  setBarraComp('ch-porte',    contaPorte(escolasAtivas), contaPorte(escB));
+  setBarraComp('ch-servicos', contaServ(DATA.saude),     contaServ(sauB));
 
   // densidade top10 (sempre cidade toda; destaca bairro selecionado)
   const top = [...DATA.censo].sort((a,b)=>b.hab_ha-a.hab_ha).slice(0,10);
@@ -547,6 +660,16 @@ L.control.layers(null, {
   '🏥 Saúde — demais': camadas.sauNao,
 }, {collapsed:false}).addTo(mapa);
 
+// camada exclusiva do pino de endereço (fora do controle de camadas)
+const camadaPin = L.layerGroup().addTo(mapa);
+// distância aproximada em metros entre dois pontos (fórmula de Haversine)
+function distanciaM(aLat,aLng,bLat,bLng){
+  const R=6371000, rad=Math.PI/180;
+  const dLat=(bLat-aLat)*rad, dLng=(bLng-aLng)*rad;
+  const s=Math.sin(dLat/2)**2 + Math.cos(aLat*rad)*Math.cos(bLat*rad)*Math.sin(dLng/2)**2;
+  return 2*R*Math.asin(Math.sqrt(s));
+}
+
 // destaque = casa com a busca; apagado = há busca ativa e este ponto não casa
 function ponto(lat,lng,cor,destaque,apagado){
   return L.circleMarker([lat,lng],{
@@ -574,32 +697,61 @@ function popupSaude(s){
 
 function atualizaMapa(){
   Object.values(camadas).forEach(g=>g.clearLayers());
-  const buscando = !!(termoEsc || termoSau);
+  camadaPin.clearLayers();
+  const buscando = !!termoGeral;
+  const modoEndereco = !!geoPin;   // endereço/CEP localizado: destaca por proximidade
   const pts = [], achados = [];
   let unico = null;
 
-  filtraEscTodas().forEach(e=>{
+  // no modo endereço, ignora o filtro de bairro para achar tudo que estiver por perto
+  const listaEsc = modoEndereco ? DATA.escolas : filtraEscTodas();
+  const listaSau = modoEndereco ? DATA.saude   : filtraSau();
+
+  listaEsc.forEach(e=>{
     if (e.lat==null) return;
-    const destaque = !!termoEsc && casaEsc(e);
+    // modo endereço: "marca" quem está no raio (sem anel pulsante, só realça pelo contraste);
+    // modo texto: "destaca" (anel pulsante) quem casa com a busca
+    const perto = modoEndereco && distanciaM(geoPin.lat,geoPin.lng,e.lat,e.lng) <= RAIO_M;
+    const destaque = !modoEndereco && !!termoEsc && casaEsc(e);
+    const marcado = modoEndereco ? perto : destaque;
     const alvo = e.categoria==='Privada' ? camadas.escPriv : camadas.escPub;
     const cor  = e.categoria==='Privada' ? COR.azul : COR.laranja;
-    const m = ponto(e.lat,e.lng,cor,destaque,buscando && !destaque)
+    const m = ponto(e.lat,e.lng,cor,destaque,buscando && !marcado)
       .bindPopup(popupEscola(e)).addTo(alvo);
     pts.push([e.lat,e.lng]);
-    if (destaque){ achados.push([e.lat,e.lng]); unico = m; }
+    if (marcado){ achados.push([e.lat,e.lng]); unico = m; }
   });
-  filtraSau().forEach(s=>{
+  listaSau.forEach(s=>{
     if (s.lat==null) return;
-    const destaque = !!termoSau && casaSau(s);
+    const perto = modoEndereco && distanciaM(geoPin.lat,geoPin.lng,s.lat,s.lng) <= RAIO_M;
+    const destaque = !modoEndereco && !!termoSau && casaSau(s);
+    const marcado = modoEndereco ? perto : destaque;
     const alvo = s.sus ? camadas.sauSus : camadas.sauNao;
-    const m = ponto(s.lat,s.lng, s.sus?COR.verde:COR.marrom, destaque, buscando && !destaque)
+    const m = ponto(s.lat,s.lng, s.sus?COR.verde:COR.marrom, destaque, buscando && !marcado)
       .bindPopup(popupSaude(s)).addTo(alvo);
     pts.push([s.lat,s.lng]);
-    if (destaque){ achados.push([s.lat,s.lng]); unico = m; }
+    if (marcado){ achados.push([s.lat,s.lng]); unico = m; }
   });
 
   // os destaques ficam por cima dos demais pontos
   Object.values(camadas).forEach(g=>g.eachLayer(m=>{ if (m.options.className) m.bringToFront(); }));
+
+  // modo endereço: fixa o pino, desenha o raio de proximidade e enquadra o entorno
+  if (modoEndereco){
+    L.circle([geoPin.lat,geoPin.lng], {
+      radius:RAIO_M, color:COR.escuro, weight:1, dashArray:'5 5',
+      fillColor:COR.azul, fillOpacity:.08
+    }).addTo(camadaPin);
+    const pin = L.marker([geoPin.lat,geoPin.lng], {
+      icon:L.divIcon({className:'pin-wrap', html:'📍', iconSize:[30,30], iconAnchor:[15,28], popupAnchor:[0,-26]}),
+      zIndexOffset:1000
+    }).bindPopup(`<b>Endereço buscado</b><br>${geoPin.nome}`).addTo(camadaPin);
+    if (achados.length) mapa.fitBounds(L.latLngBounds(achados.concat([[geoPin.lat,geoPin.lng]])).pad(0.35));
+    else mapa.setView([geoPin.lat,geoPin.lng], 15);
+    pin.openPopup();
+    avisaBusca(achados.length, true);
+    return;
+  }
 
   if (achados.length===1) mapa.setView(achados[0], 16); // um ponto só: fitBounds iria ao zoom máximo
   else if (achados.length) mapa.fitBounds(L.latLngBounds(achados).pad(0.3));
@@ -607,6 +759,11 @@ function atualizaMapa(){
   else mapa.fitBounds(VISTA_CIDADE);
   if (achados.length===1 && unico) unico.openPopup();
 
+  // busca sem correspondência em escola/unidade → tenta interpretar como endereço/CEP
+  if (buscando && achados.length===0 && termoGeral.length>=4 && geoTentadoTermo!==termoGeral && !geoBuscando){
+    tentaEndereco(termoGeral);
+    return;
+  }
   avisaBusca(achados.length, buscando);
 }
 
@@ -615,12 +772,70 @@ function avisaBusca(qtd, buscando){
   const aviso = $('aviso-busca');
   aviso.hidden = !buscando;
   if (!buscando) return;
-  const partes = [];
-  if (termoEsc) partes.push(`escolas com “${$('busca-escolas').value.trim()}”`);
-  if (termoSau) partes.push(`unidades de saúde com “${$('busca-saude').value.trim()}”`);
-  $('aviso-busca-texto').textContent = qtd
-    ? `🔎 Mapa destacando ${qtd} resultado(s) da busca: ${partes.join(' e ')}.`
-    : `🔎 Nenhum resultado com coordenada no mapa para ${partes.join(' e ')}.`;
+  const termo = $('busca-geral').value.trim();
+  const km = (RAIO_M/1000).toLocaleString('pt-BR',{maximumFractionDigits:1});
+  if (geoPin){
+    const curto = geoPin.nome.split(',').slice(0,3).join(',').trim();
+    $('aviso-busca-texto').textContent = qtd
+      ? `📍 Endereço localizado: ${curto}. Destacando ${qtd} escola(s)/unidade(s) num raio de ${km} km.`
+      : `📍 Endereço localizado: ${curto}. Nenhuma escola ou unidade de saúde num raio de ${km} km.`;
+  } else if (qtd){
+    $('aviso-busca-texto').textContent = `🔎 Mapa destacando ${qtd} resultado(s) para “${termo}”.`;
+  } else {
+    $('aviso-busca-texto').textContent = `🔎 Nada encontrado para “${termo}” — nenhuma escola, unidade de saúde ou endereço.`;
+  }
+}
+
+/* ---- geocodificação de endereço/CEP (Nominatim / OpenStreetMap) ----
+   Depende de acesso à internet. Restrita ao município de São Vicente (SP): entre os
+   candidatos retornados, só aceita o que o Nominatim classifica como de São Vicente/SP.
+   Se nenhum candidato for de São Vicente, retorna null (endereço não encontrado). */
+function ehSaoVicente(x){
+  const a = x.address || {};
+  const cidade = (a.city || a.town || a.municipality || a.village || '').toLowerCase();
+  const uf = (a.state || '').toLowerCase();
+  return /s[aã]o\s+vicente/.test(cidade) && (uf.includes('paulo') || uf === '');
+}
+async function geocodeEndereco(q){
+  const chave = q.toLowerCase();
+  if (chave in geoCache) return geoCache[chave];
+  const semEspaco = q.replace(/\s/g,'');
+  const ehCep = /^\d{5}-?\d{3}$/.test(semEspaco);
+  // CEP: resolve pelo próprio código (validação abaixo garante que é de São Vicente);
+  // endereço: enviesa a consulta para São Vicente/SP
+  const consulta = ehCep ? semEspaco + ', Brasil' : q + ', São Vicente, SP, Brasil';
+  const params = new URLSearchParams({
+    format:'json', q:consulta, limit:'8', countrycodes:'br', addressdetails:'1',
+    viewbox:'-46.52,-24.00,-46.34,-23.87', bounded:'0'
+  });
+  try{
+    const r = await fetch('https://nominatim.openstreetmap.org/search?' + params);
+    const arr = await r.json();
+    const sv = Array.isArray(arr) ? arr.find(ehSaoVicente) : null;   // só resultados de São Vicente
+    const res = sv ? { lat:+sv.lat, lng:+sv.lon, nome:sv.display_name } : null;
+    geoCache[chave] = res;
+    return res;
+  } catch(e){ return null; }
+}
+
+// dispara a geocodificação e, se localizar, redesenha o mapa em "modo endereço"
+async function tentaEndereco(termo){
+  geoBuscando = true;
+  geoTentadoTermo = termo;                 // marca a tentativa (evita repetir com o mesmo termo)
+  const texto = $('busca-geral').value.trim();
+  $('aviso-busca').hidden = false;
+  $('aviso-busca-texto').textContent = `🔎 Procurando “${texto}” como endereço/CEP em São Vicente…`;
+  const geo = await geocodeEndereco(texto);
+  geoBuscando = false;
+  if (termo !== termoGeral) return;        // o termo mudou durante a busca; ignora este resultado
+  if (geo){
+    geoPin = { ...geo, termo };
+    atualizaMapa();
+  } else {
+    geoPin = null;
+    $('aviso-busca').hidden = false;
+    $('aviso-busca-texto').textContent = `📍 Endereço ou CEP não encontrado em São Vicente para “${texto}”.`;
+  }
 }
 
 const semCoord = DATA.escolas.filter(e=>e.lat==null).length + DATA.saude.filter(s=>s.lat==null).length;
@@ -687,18 +902,24 @@ function linhasSaude(termo){
     <td>${s.sus?'<span class="badge verde">SUS</span>':'<span class="badge cinza">Não</span>'}</td>
     <td>${serv||'–'}</td></tr>`;}).join('');
 }
-// a busca também repercute no mapa; debounce evita redesenhar a cada tecla
+// a busca unificada acima do mapa alimenta as duas tabelas e o próprio mapa;
+// o debounce evita redesenhar (e geocodificar) a cada tecla
 let timerBusca = null;
-function buscou(fn, valor){
-  fn(valor);
+function buscaGeral(v){
+  const t = v.trim().toLowerCase();
+  if (t !== termoGeral){ geoPin = null; geoTentadoTermo = null; }  // termo mudou: invalida o pino
+  termoGeral = t;
+  linhasEscolas(v);            // define termoEsc e atualiza a tabela de escolas
+  linhasSaude(v);             // define termoSau e atualiza a tabela de saúde
   clearTimeout(timerBusca);
-  timerBusca = setTimeout(atualizaMapa, 250);
+  timerBusca = setTimeout(atualizaMapa, 350);
 }
-$('busca-escolas').addEventListener('input', e=>buscou(linhasEscolas, e.target.value));
-$('busca-saude').addEventListener('input', e=>buscou(linhasSaude, e.target.value));
+$('busca-geral').addEventListener('input', e=>buscaGeral(e.target.value));
 $('btn-limpar-busca').addEventListener('click', ()=>{
-  $('busca-escolas').value = ''; $('busca-saude').value = '';
-  linhasEscolas(''); linhasSaude(''); atualizaMapa();
+  $('busca-geral').value = '';
+  geoPin = null; geoTentadoTermo = null;
+  buscaGeral('');
+  atualizaMapa();
 });
 
 document.querySelectorAll('.aba').forEach(btn=>{
@@ -715,8 +936,12 @@ function atualizaTudo(){
   atualizaKPIs();
   atualizaGraficos();
   atualizaRankings();
-  linhasEscolas($('busca-escolas').value); // definem termoEsc/termoSau usados pelo mapa
-  linhasSaude($('busca-saude').value);
+  // troca de bairro/limpeza cancela o modo endereço; a busca é reavaliada no novo contexto
+  geoPin = null; geoTentadoTermo = null;
+  const v = $('busca-geral').value;
+  termoGeral = v.trim().toLowerCase();
+  linhasEscolas(v);            // definem termoEsc/termoSau usados pelo mapa
+  linhasSaude(v);
   atualizaMapa();
 }
 atualizaTudo();
